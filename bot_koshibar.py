@@ -10,7 +10,7 @@ from telegram.ext import (
 )
 
 # 🔑 TON TOKEN RECEVEUR DE @BotFather
-TOKEN = "8939179182:AAF8dELwQi3lC5zK58TsBrkbXSCgtBxVvhs"
+TOKEN = "8939179182:AAFSme_jksnnQ1ckjOZfMWXe6rklInFKMLY"
 
 # 👑 TON ID TELEGRAM
 ADMIN_ID =  8938252970
