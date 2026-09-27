@@ -1,3 +1,4 @@
+import os
 import datetime
 import logging
 import sqlite3
@@ -9,11 +10,9 @@ from telegram.ext import (
     ContextTypes,
 )
 
-# 🔑 TON TOKEN RECEVEUR DE @BotFather
-TOKEN = "8939179182:AAFSme_jksnnQ1ckjOZfMWXe6rklInFKMLY"
-
-# 👑 TON ID TELEGRAM
-ADMIN_ID =  8938252970
+# 🔑 Récupération sécurisée depuis les Secrets GitHub
+TOKEN = os.getenv("TELEGRAM_TOKEN", "8939179182:AAFSme_jksnnQ1ckjOZfMWXe6rklInFKMLY")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "8938252970"))
 
 DB_FILE = "koshibar_v2ray.db"
 
@@ -124,28 +123,34 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     now = datetime.datetime.now()
 
-    if user_id not in user_sessions:
-        user_sessions[user_id] = {}
+    # --- VERIFICATION LIMITATION 5 HEURES ---
+    # Si l'utilisateur n'est PAS l'administrateur, on applique le contrôle de délai
+    if user_id != ADMIN_ID:
+        if user_id not in user_sessions:
+            user_sessions[user_id] = {}
 
-    if protocole in user_sessions[user_id]:
-        expiration = user_sessions[user_id][protocole]
-        if now < expiration:
-            temps_restant = expiration - now
-            heures, reste = divmod(temps_restant.seconds, 3600)
-            minutes, _ = divmod(reste, 60)
-            
-            await send_func(
-                f"🔥 **KOSHIBAR BOT** 🔥\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"⚠️ **Ton compte {protocole.upper()} est encore actif !**\n\n"
-                f"⏱️ Temps restant : **{heures}h {minutes}min**\n\n"
-                f"Reviens à la fin du compte à rebours pour le renouveler.",
-                parse_mode="Markdown"
-            )
-            return
+        if protocole in user_sessions[user_id]:
+            expiration = user_sessions[user_id][protocole]
+            if now < expiration:
+                temps_restant = expiration - now
+                heures, reste = divmod(temps_restant.seconds, 3600)
+                minutes, _ = divmod(reste, 60)
+                
+                await send_func(
+                    f"🔥 **KOSHIBAR BOT** 🔥\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"⚠️ **Ton compte {protocole.upper()} est encore actif !**\n\n"
+                    f"⏱️ Temps restant : **{heures}h {minutes}min**\n\n"
+                    f"Reviens à la fin du compte à rebours pour le renouveler.",
+                    parse_mode="Markdown"
+                )
+                return
+        
+        # On enregistre le délai de 5h uniquement pour un utilisateur normal
+        user_sessions[user_id][protocole] = now + datetime.timedelta(hours=5)
 
+    # Récupération et envoi du serveur
     cle_serveur = get_server_from_db(protocole)
-    user_sessions[user_id][protocole] = now + datetime.timedelta(hours=5)
 
     msg = (
         f"🔥 **KOSHIBAR BOT** 🔥\n"
