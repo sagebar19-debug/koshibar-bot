@@ -10,10 +10,10 @@ from telegram.ext import (
 )
 
 # 🔑 TON TOKEN RECEVEUR DE @BotFather
-TOKEN = "TON_TOKEN_TELEGRAM_ICI"
+TOKEN = "8939179182:AAF8dELwQi3lC5zK58TsBrkbXSCgtBxVvhs"
 
 # 👑 TON ID TELEGRAM
-ADMIN_ID = 123456789
+ADMIN_ID =  8938252970
 
 DB_FILE = "koshibar_v2ray.db"
 
