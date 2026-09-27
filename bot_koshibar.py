@@ -34,10 +34,10 @@ def init_db():
     """)
 
     default_servers = [
-        ("vless", "vless://f9473da5-9b8c-4e1a-a2c3-d4e5f6a7b8c9@zain.blogblog.com:443?path=%2FKoshibar&security=tls&encryption=none&insecure=0&host=koshibar-xray-503433272017.europe-west1.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#%E2%9C%A8%20Koshibar-Xray-GCP%20%E2%9C%A8"),
-        ("trojan", "trojan://KOSHIBAR@zain.blogblog.com:443?path=%2Fkoshibar-trojan&security=tls&insecure=0&host=koshibar-325871270558.us-west1.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#Koshibar"),
-        ("vmess", "vmess://eyJhZGQiOiJ6YWluLmJsb2dibG9nLmNvbSIsImFpZCI6IjAiLCJhbHBuIjoiIiwiZnAiOiIiLCJob3N0Ijoia29zaGliYXItdm1lc3MtNTAzNDMzMjcyMDE3LmV1cm9wZS13ZXN0MS5ydW4uYXBwIiwiaWQiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJpbnNlY3VyZSI6IjAiLCJuZXQiOiJ3cyIsInBhdGgiOiIvS29zaGliYXIvVm1lc3MiLCJwY3MiOiIiLCJwb3J0IjoiNDQzIiwicHMiOiJrb3NoaWJhciBWbWVzcyIsInNjeSI6ImNoYWNoYTIwLXBvbHkxMzA1Iiwic25pIjoiemFpbi5ibG9nYmxvZy5jb20iLCJ0bHMiOiJ0bHMiLCJ0eXBlIjoiLS0tIiwidiI6IjIiLCJ2Y24iOiIifQ=="),
-        ("ssh", "💻 KOSHIBAR 9999 CREDITOS 💻\nHost/IP-Address : 169.58.100.47\nUSUARIO : Koshibar\nPASSWD : Koshibar\nDURACION: 21/09/2026\nLIMITE : 2\n━━━━━━━━━━━━━━━━━━━━━\nGET /app10 HTTP/1.1[crlf]Host: [rotate=koshibar-ssh-503433272017.europe-west1.run.app][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: Websocket[crlf][crlf]")
+        ("vless", "vless://f9473da5-9b8c-4e1a-a2c3-d4e5f6a7b8c9@zain.blogblog.com:443?path=%2FKoshibar&security=tls&encryption=none&insecure=0&host=koshibar-xray-38265879733.us-east4.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#%E2%9C%A8%20Koshibar-Xray-GCP%20%E2%9C%A8"),
+        ("trojan", "trojan://KOSHIBAR@zain.blogblog.com:443?path=%2Fkoshibar-trojan&security=tls&insecure=0&host=koshibar-325871270558.us-west1.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#Koshibar❌"),
+        ("vmess", "vmess://eyJhZGQiOiJ6YWluLmJsb2dibG9nLmNvbSIsImFpZCI6IjAiLCJhbHBuIjoiIiwiZnAiOiIiLCJob3N0Ijoia29zaGliYXItdm1lc3MtMzgyNjU4Nzk3MzMudXMtZWFzdDQucnVuLmFwcCIsImlkIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaW5zZWN1cmUiOiIwIiwibmV0Ijoid3MiLCJwYXRoIjoiL0tvc2hpYmFyL1ZtZXNzIiwicGNzIjoiIiwicG9ydCI6IjQ0MyIsInBzIjoia29zaGliYXIgVm1lc3MiLCJzY3kiOiJjaGFjaGEyMC1wb2x5MTMwNSIsInNuaSI6InphaW4uYmxvZ2Jsb2cuY29tIiwidGxzIjoidGxzIiwidHlwZSI6Ii0tLSIsInYiOiIyIiwidmNuIjoiIn0="),
+        ("ssh", "💻 KOSHIBAR 9999 CREDITOS 💻\nHost/IP-Address : 169.58.100.47\nUSUARIO : Koshibar\nPASSWD : Koshibar\nDURACION: 21/09/2026\nLIMITE : 2\n━━━━━━━━━━━━━━━━━━━━━\nGET /app10 HTTP/1.1[crlf]Host: [rotate=koshibar-ssh-503433272017.europe-west1.run.app][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: Websocket[crlf][crlf]❌")
     ]
 
     for protocol, link in default_servers:
