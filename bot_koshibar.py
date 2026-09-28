@@ -33,9 +33,9 @@ def init_db():
     """)
 
     default_servers = [
-        ("vless", "vless://f9473da5-9b8c-4e1a-a2c3-d4e5f6a7b8c9@zain.blogblog.com:443?path=%2FKoshibar&security=tls&encryption=none&insecure=0&host=koshibar-xray-38265879733.us-east4.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#%E2%9C%A8%20Koshibar-Xray-GCP%20%E2%9C%A8"),
+        ("vless", "vless://f9473da5-9b8c-4e1a-a2c3-d4e5f6a7b8c9@zain.blogblog.com:443?path=%2FKoshibar&security=tls&encryption=none&insecure=0&host=koshibar-xray-382658896650.us-east4.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#%E2%9C%A8%20Koshibar-Xray-GCP%20%E2%9C%A8"),
         ("trojan", "trojan://KOSHIBAR@zain.blogblog.com:443?path=%2Fkoshibar-trojan&security=tls&insecure=0&host=koshibar-325871270558.us-west1.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#Koshibar❌"),
-        ("vmess", "vmess://eyJhZGQiOiJ6YWluLmJsb2dibG9nLmNvbSIsImFpZCI6IjAiLCJhbHBuIjoiIiwiZnAiOiIiLCJob3N0Ijoia29zaGliYXItdm1lc3MtMzgyNjU4Nzk3MzMudXMtZWFzdDQucnVuLmFwcCIsImlkIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaW5zZWN1cmUiOiIwIiwibmV0Ijoid3MiLCJwYXRoIjoiL0tvc2hpYmFyL1ZtZXNzIiwicGNzIjoiIiwicG9ydCI6IjQ0MyIsInBzIjoia29zaGliYXIgVm1lc3MiLCJzY3kiOiJjaGFjaGEyMC1wb2x5MTMwNSIsInNuaSI6InphaW4uYmxvZ2Jsb2cuY29tIiwidGxzIjoidGxzIiwidHlwZSI6Ii0tLSIsInYiOiIyIiwidmNuIjoiIn0="),
+        ("vmess", "vmess://eyJhZGQiOiJ6YWluLmJsb2dibG9nLmNvbSIsImFpZCI6IjAiLCJhbHBuIjoiIiwiZnAiOiIiLCJob3N0Ijoia29zaGliYXItdm1lc3MtMzgyNjU4ODk2NjUwLnVzLWVhc3Q0LnJ1bi5hcHAiLCJpZCI6IjExMTExMTExLTExMTEtNDExMS04MTExLTExMTExMTExMTExMSIsImluc2VjdXJlIjoiMCIsIm5ldCI6IndzIiwicGF0aCI6Ii9Lb3NoaWJhci9WbWVzcyIsInBjcyI6IiIsInBvcnQiOiI0NDMiLCJwcyI6Imtvc2hpYmFyIFZtZXNzIiwic2N5IjoiY2hhY2hhMjAtcG9seTEzMDUiLCJzbmkiOiJ6YWluLmJsb2dibG9nLmNvbSIsInRscyI6InRscyIsInR5cGUiOiItLS0iLCJ2IjoiMiIsInZjbiI6IiJ9"),
         ("ssh", "💻 KOSHIBAR 9999 CREDITOS 💻\nHost/IP-Address : 169.58.100.47\nUSUARIO : Koshibar\nPASSWD : Koshibar\nDURACION: 21/09/2026\nLIMITE : 2\n━━━━━━━━━━━━━━━━━━━━━\nGET /app10 HTTP/1.1[crlf]Host: [rotate=koshibar-ssh-503433272017.europe-west1.run.app][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: Websocket[crlf][crlf]❌")
     ]
 
