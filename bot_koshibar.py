@@ -44,11 +44,12 @@ def init_db():
         )
     """)
 
+    # Initialisation avec des emplacements vides
     default_servers = [
-        ("vless", "vless://f9473da5-9b8c-4e1a-a2c3-d4e5f6a7b8c9@zain.blogblog.com:443?path=%2FKoshibar&security=tls&encryption=none&insecure=0&host=koshibar-xray-382658896650.us-east4.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#%E2%9C%A8%20Koshibar-Xray-GCP%20%E2%9C%A8"),
-        ("trojan", "trojan://KOSHIBAR@zain.blogblog.com:443?path=%2Fkoshibar-trojan&security=tls&insecure=0&host=koshibar-325871270558.us-west1.run.app&type=ws&allowInsecure=0&sni=zain.blogblog.com#Koshibar❌"),
-        ("vmess", "vmess://eyJhZGQiOiJ6YWluLmJsb2dibG9nLmNvbSIsImFpZCI6IjAiLCJhbHBuIjoiIiwiZnAiOiIiLCJob3N0Ijoia29zaGliYXItdm1lc3MtMzgyNjU4ODk2NjUwLnVzLWVhc3Q0LnJ1bi5hcHAiLCJpZCI6IjExMTExMTExLTExMTEtNDExMS04MTExLTExMTExMTExMTExMSIsImluc2VjdXJlIjoiMCIsIm5ldCI6IndzIiwicGF0aCI6Ii9Lb3NoaWJhci9WbWVzcyIsInBjcyI6IiIsInBvcnQiOiI0NDMiLCJwcyI6Imtvc2hpYmFyIFZtZXNzIiwic2N5IjoiY2hhY2hhMjAtcG9seTEzMDUiLCJzbmkiOiJ6YWluLmJsb2dibG9nLmNvbSIsInRscyI6InRscyIsInR5cGUiOiItLS0iLCJ2IjoiMiIsInZjbiI6IiJ9"),
-        ("ssh", "💻 KOSHIBAR 9999 CREDITOS 💻\nHost/IP-Address : 169.58.100.47\nUSUARIO : Koshibar\nPASSWD : Koshibar\nDURACION: 21/09/2026\nLIMITE : 2\n━━━━━━━━━━━━━━━━━━━━━\nGET /app10 HTTP/1.1[crlf]Host: [rotate=koshibar-ssh-503433272017.europe-west1.run.app][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: Websocket[crlf][crlf]❌")
+        ("vless", "Aucun serveur VLESS configuré. Utilisez /setvless <lien> sur Telegram."),
+        ("trojan", "Aucun serveur TROJAN configuré. Utilisez /settrojan <lien> sur Telegram."),
+        ("vmess", "Aucun serveur VMESS configuré. Utilisez /setvmess <lien> sur Telegram."),
+        ("ssh", "Aucun serveur SSH configuré. Utilisez /setssh <texte> sur Telegram.")
     ]
 
     for protocol, link in default_servers:
@@ -122,11 +123,10 @@ def get_main_keyboard():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "╔══════════════════════════════════╗\n"
-        "║     🔥  **BIENVENUE CHEZ KOSHIBAR**  🔥    ║\n"
-        "╚══════════════════════════════════╝\n\n"
-        "🚀 **Votre plateforme d'accès réseau haut débit.**\n\n"
-        "👇 *Utilisez le menu ci-dessous pour naviguer facilement dans le bot :*"
+        "🔥 *BIENVENUE CHEZ KOSHIBAR BOT* 🔥\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🚀 *Votre plateforme d'accès réseau haut débit.*\n\n"
+        "👇 *Utilisez le menu ci-dessous pour naviguer facilement :*"
     )
     await update.message.reply_text(msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
@@ -137,11 +137,10 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_icon = "✅" if has_access else "❌"
     
     msg = (
-        "╔══════════════════════════════════╗\n"
-        "║      👤 **STATUT DU COMPTE KOSHIBAR**     ║\n"
-        "╚══════════════════════════════════╝\n\n"
-        f"🆔 **ID Utilisateur** : `{user_id}`\n"
-        f"{status_icon} **Accès** : {details}\n\n"
+        "👤 *STATUT DE VOTRE COMPTE*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🆔 *ID Utilisateur* : `{user_id}`\n"
+        f"{status_icon} *Accès* : {details}\n\n"
         "💡 *Pour renouveler ou activer votre compte, contactez l'administration.*"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
@@ -159,12 +158,11 @@ async def menu_serveurs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_access, details = check_user_access(user_id)
     if not has_access:
         msg = (
-            "╔══════════════════════════════════╗\n"
-            "║        ⛔ **ACCÈS NON AUTORISÉ**        ║\n"
-            "╚══════════════════════════════════╝\n\n"
+            "⛔ *ACCÈS NON AUTORISÉ*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             "⚠️ Vous n'avez pas d'accès actif pour consulter les serveurs.\n\n"
-            f"📌 **Votre ID** : `{user_id}`\n"
-            "👉 Transmettez cet ID à l'Administrateur sur WhatsApp pour activer votre accès !"
+            f"📌 *Votre ID* : `{user_id}`\n\n"
+            "👉 Transmettez cet ID à l'Administrateur sur WhatsApp pour activer votre compte !"
         )
         keyboard = [
             [InlineKeyboardButton("💬 Contacter l'Admin sur WhatsApp", url=WHATSAPP_LINK)],
@@ -174,14 +172,13 @@ async def menu_serveurs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = (
-        "╔══════════════════════════════════╗\n"
-        "║   🌐 **KOSHIBAR - SÉLECTION PROTOCOLE**   ║\n"
-        "╚══════════════════════════════════╝\n\n"
-        "Choisissez le protocole réseau à télécharger :\n\n"
-        "🔹 **VLESS** — Haute vitesse & TLS\n"
-        "🔹 **TROJAN** — Contournement avancé\n"
-        "🔹 **VMESS** — Connexion multi-plateforme\n"
-        "🔹 **SSH** — Payload + Compte SSH Premium"
+        "🌐 *SELECTION DU PROTOCOLE*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Choisissez le protocole à récupérer :\n\n"
+        "🔹 *VLESS* — Haute vitesse & TLS\n"
+        "🔹 *TROJAN* — Contournement avancé\n"
+        "🔹 *VMESS* — Connexion multi-plateforme\n"
+        "🔹 *SSH* — Payload + Compte SSH Premium"
     )
     keyboard = [
         [InlineKeyboardButton("🌐 VLESS", callback_data="get_vless"), InlineKeyboardButton("🛡️ TROJAN", callback_data="get_trojan")],
@@ -192,13 +189,12 @@ async def menu_serveurs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def contact_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "╔══════════════════════════════════╗\n"
-        "║    📩 **CONTACT & SUPPORT OFFICIEL**     ║\n"
-        "╚══════════════════════════════════╝\n\n"
-        "👤 **Créateur & Administrateur** : KOSHIBAR\n"
-        "📱 **WhatsApp Direct** : `+243986269802`\n"
-        "💬 **Canal Telegram** : @koshibar\n\n"
-        "✨ *Cliquez sur les boutons ci-dessous pour joindre l'administration directement :*"
+        "📩 *CONTACT & SUPPORT OFFICIEL*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👤 *Créateur & Administrateur* : KOSHIBAR\n"
+        "📱 *WhatsApp Direct* : `+243986269802`\n"
+        "💬 *Canal Telegram* : @koshibar\n\n"
+        "✨ *Cliquez ci-dessous pour joindre le support :*"
     )
     keyboard = [
         [InlineKeyboardButton("💬 Discussion WhatsApp (+243986269802)", url=WHATSAPP_LINK)],
@@ -218,7 +214,7 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     has_access, _ = check_user_access(user_id)
     if not has_access:
-        await send_func("⛔ **Votre accès a expiré ou n'est pas actif.**", parse_mode="Markdown")
+        await send_func("⛔ *Votre accès a expiré ou n'est pas actif.*", parse_mode="Markdown")
         return
 
     now = datetime.datetime.now()
@@ -235,8 +231,8 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 minutes, _ = divmod(reste, 60)
                 
                 await send_func(
-                    f"⚠️ **Compte encore actif !**\n\n"
-                    f"⏱️ Prochaine génération disponible dans : **{heures}h {minutes}min**",
+                    f"⚠️ *Compte encore actif !*\n\n"
+                    f"⏱️ Prochaine génération disponible dans : *{heures}h {minutes}min*",
                     parse_mode="Markdown"
                 )
                 return
@@ -246,9 +242,8 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     cle_serveur = get_server_from_db(protocole)
 
     msg = (
-        "╔══════════════════════════════════╗\n"
-        f"║   🚀 **SERVEUR {protocole.upper()} KOSHIBAR**   ║\n"
-        "╚══════════════════════════════════╝\n\n"
+        f"🚀 *SERVEUR {protocole.upper()} KOSHIBAR*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "📋 *Cliquez sur le bloc pour copier le lien :*\n\n"
         f"```\n{cle_serveur}\n```\n\n"
         "⚡ *Profitez d'une connexion rapide et sécurisée !*"
@@ -282,14 +277,14 @@ async def grant_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) < 2:
-        await update.message.reply_text("💡 **Usage** : `/grant <ID_TELEGRAM> <JOURS>`\nExemple : `/grant 123456789 30`", parse_mode="Markdown")
+        await update.message.reply_text("💡 *Usage* : `/grant <ID_TELEGRAM> <JOURS>`\nExemple : `/grant 123456789 30`", parse_mode="Markdown")
         return
 
     try:
         target_id = int(context.args[0])
         days = int(context.args[1])
         set_user_subscription(target_id, days)
-        await update.message.reply_text(f"✅ **Succès !** L'utilisateur `{target_id}` a reçu un accès valide pour **{days} jours**.", parse_mode="Markdown")
+        await update.message.reply_text(f"✅ *Succès !* L'utilisateur `{target_id}` a reçu un accès valide pour *{days} jours*.", parse_mode="Markdown")
     except ValueError:
         await update.message.reply_text("❌ L'ID et le nombre de jours doivent être des chiffres.", parse_mode="Markdown")
 
@@ -299,7 +294,7 @@ async def revoke_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text("💡 **Usage** : `/revoke <ID_TELEGRAM>`", parse_mode="Markdown")
+        await update.message.reply_text("💡 *Usage* : `/revoke <ID_TELEGRAM>`", parse_mode="Markdown")
         return
 
     try:
@@ -321,7 +316,7 @@ async def set_server(update: Update, context: ContextTypes.DEFAULT_TYPE, protoco
 
     nouveau_contenu = update.message.text.split(f"/set{protocole}", 1)[1].strip()
     update_server_in_db(protocole, nouveau_contenu)
-    await update.message.reply_text(f"✅ Le serveur **{protocole.upper()}** a été mis à jour avec succès !", parse_mode="Markdown")
+    await update.message.reply_text(f"✅ Le serveur *{protocole.upper()}* a été mis à jour avec succès !", parse_mode="Markdown")
 
 async def set_vless(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await set_server(update, context, "vless")
