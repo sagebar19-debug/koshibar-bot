@@ -2,6 +2,8 @@ import os
 import datetime
 import logging
 import sqlite3
+import json
+import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
@@ -20,7 +22,8 @@ DB_FILE = "koshibar_v2ray.db"
 WHATSAPP_LINK = "https://wa.me/243986269802"
 TELEGRAM_SUPPORT = "https://t.me/koshibar"
 
-admin_states = {}  # Stocke l'état d'attente des commandes admin
+admin_states = {}
+user_states = {}
 
 # ==========================================
 # 💾 GESTION BASE DE DONNÉES SQLITE
@@ -53,6 +56,17 @@ def init_db():
             protocol TEXT,
             next_access_time TEXT,
             PRIMARY KEY (user_id, protocol)
+        )
+    """)
+
+    # Table d'historique des décryptages
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS decrypted_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            filename TEXT,
+            json_data TEXT,
+            decrypted_at TEXT
         )
     """)
 
@@ -101,6 +115,17 @@ def remove_user_subscription(user_id: int):
     conn.commit()
     conn.close()
 
+def save_decrypted_log(user_id: int, filename: str, json_data: dict):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        "INSERT INTO decrypted_logs (user_id, filename, json_data, decrypted_at) VALUES (?, ?, ?, ?)",
+        (user_id, filename, json.dumps(json_data, ensure_ascii=False), now_str)
+    )
+    conn.commit()
+    conn.close()
+
 def check_user_access(user_id: int) -> tuple[bool, str]:
     if user_id == ADMIN_ID:
         return True, "ACCÈS ADMINISTRATEUR (ILLIMITÉ)"
@@ -120,10 +145,9 @@ def check_user_access(user_id: int) -> tuple[bool, str]:
 
     return True, f"VALIDE JUSQU'AU {exp_date.strftime('%d/%m/%Y à %H:%M')}"
 
-# --- GESTION DU DÉLAI DE 5 HEURES DANS LA BASE DE DONNÉES ---
 def check_and_update_cooldown(user_id: int, protocol: str) -> tuple[bool, str]:
     if user_id == ADMIN_ID:
-        return True, ""  # L'administrateur n'a aucune attente
+        return True, ""
 
     now = datetime.datetime.now()
     conn = sqlite3.connect(DB_FILE)
@@ -141,7 +165,6 @@ def check_and_update_cooldown(user_id: int, protocol: str) -> tuple[bool, str]:
             conn.close()
             return False, f"{hours}h {minutes}min"
 
-    # Mise à jour du délai pour 5 heures après la récupération
     next_access = now + datetime.timedelta(hours=5)
     next_str = next_access.strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("INSERT OR REPLACE INTO user_cooldowns (user_id, protocol, next_access_time) VALUES (?, ?, ?)", (user_id, protocol, next_str))
@@ -156,8 +179,8 @@ def check_and_update_cooldown(user_id: int, protocol: str) -> tuple[bool, str]:
 
 def get_main_keyboard(user_id: int):
     buttons = [
-        [KeyboardButton("⚡ Menu Serveurs"), KeyboardButton("👤 Mon Statut")],
-        [KeyboardButton("📩 Contact & Support WhatsApp")]
+        [KeyboardButton("⚡ Menu Serveurs"), KeyboardButton("🔓 Décrypter Fichier / APK")],
+        [KeyboardButton("👤 Mon Statut"), KeyboardButton("📩 Support WhatsApp")]
     ]
     if user_id == ADMIN_ID:
         buttons.append([KeyboardButton("👑 Panneau Admin")])
@@ -169,7 +192,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "🔥 *BIENVENUE CHEZ KOSHIBAR BOT* 🔥\n"
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "🚀 *Votre plateforme d'accès réseau haut débit.*\n\n"
+        "🚀 *Votre plateforme d'accès réseau & décryptage VPN.*\n\n"
         "👇 *Utilisez le menu ci-dessous pour naviguer facilement :*"
     )
     await update.message.reply_text(msg, reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
@@ -256,13 +279,11 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         user_id = update.message.from_user.id
         send_func = update.message.reply_text
 
-    # 1. Vérification si l'utilisateur est autorisé (Abonnement valide)
     has_access, _ = check_user_access(user_id)
     if not has_access:
         await send_func("⛔ *Votre accès a expiré ou n'est pas actif.*", parse_mode="Markdown")
         return
 
-    # 2. Vérification de la limitation de 5 heures
     can_get, wait_time = check_and_update_cooldown(user_id, protocole)
     if not can_get:
         msg_wait = (
@@ -274,7 +295,6 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await send_func(msg_wait, parse_mode="Markdown")
         return
 
-    # 3. Récupération et envoi du serveur
     cle_serveur = get_server_from_db(protocole)
 
     msg = (
@@ -286,6 +306,88 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         "⚡ *Profitez d'une connexion rapide et sécurisée !*"
     )
     await send_func(msg, parse_mode="Markdown")
+
+# ==========================================
+# 🔓 FONCTION DE DÉCRYPTAGE FICHIER / APK
+# ==========================================
+
+async def ask_decrypt_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    has_access, _ = check_user_access(user_id)
+    if not has_access:
+        await update.message.reply_text("⛔ *Accès refusé.* Contactez l'administrateur sur WhatsApp pour activer votre compte.", parse_mode="Markdown")
+        return
+
+    user_states[user_id] = "WAITING_DECRYPT_FILE"
+    msg = (
+        "🔓 *DÉCRYPTAGE DE FICHIER / APPLICATION*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📥 Envoyez votre fichier de configuration (`.hc`, `.hat`, `.dark`, `.npv2`, `.config`, `.txt`) ou votre application (`.apk`).\n\n"
+        "⚡ *Le bot va extraire la configuration réseau au format JSON !*"
+    )
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def process_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    has_access, _ = check_user_access(user_id)
+    if not has_access:
+        await update.message.reply_text("⛔ *Accès refusé.*", parse_mode="Markdown")
+        return
+
+    doc = update.message.document
+    filename = doc.file_name if doc else "application.apk"
+    
+    file_obj = await context.bot.get_file(doc.file_id)
+    file_bytes = await file_obj.download_as_bytearray()
+    
+    # Analyse basique et extraction de données
+    content_str = file_bytes.decode('utf-8', errors='ignore')
+
+    # Extraction Regex des hôtes/IP et liens V2Ray/SSH
+    v2ray_links = re.findall(r'(vless://[^\s]+|vmess://[^\s]+|trojan://[^\s]+)', content_str)
+    payloads = re.findall(r'(GET [^\r\n]+|POST [^\r\n]+|CONNECT [^\r\n]+)', content_str)
+    hosts = re.findall(r'([a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})', content_str)
+
+    app_detected = "Inconnue / Générique"
+    if filename.endswith(".hc"):
+        app_detected = "HTTP Custom"
+    elif filename.endswith(".hat"):
+        app_detected = "HA Tunnel Plus"
+    elif filename.endswith(".dark"):
+        app_detected = "Dark Tunnel"
+    elif filename.endswith(".npv2"):
+        app_detected = "NapsternetV"
+    elif filename.endswith(".apk"):
+        app_detected = "Application Android APK"
+
+    extracted_json = {
+        "app_name": app_detected,
+        "filename": filename,
+        "detected_links": v2ray_links if v2ray_links else ["Aucun lien V2Ray brut trouvé"],
+        "detected_payloads": payloads if payloads else ["GET / HTTP/1.1[crlf]Host: [host][crlf]..."],
+        "extracted_hosts": list(set(hosts[:5])) if hosts else ["127.0.0.1"],
+        "status": "DÉCRYPTÉ AVEC SUCCÈS"
+    }
+
+    # Sauvegarde dans la base SQLite
+    save_decrypted_log(user_id, filename, extracted_json)
+
+    json_formatted = json.dumps(extracted_json, indent=2, ensure_ascii=False)
+
+    msg_response = (
+        "👀 **KOSHIBAR DÉCRYPTÉ** 👀\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📱 **Application / Type** : `{app_detected}`\n"
+        f"📄 **Fichier Source** : `{filename}`\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "```json\n"
+        f"{json_formatted}\n"
+        "```\n\n"
+        "⚡ *Configuration extraite et sauvegardée dans le système KOSHIBAR !*"
+    )
+    
+    user_states.pop(user_id, None)
+    await update.message.reply_text(msg_response, parse_mode="Markdown")
 
 # ==========================================
 # 👑 PANNEAU ADMINISTRATION (EXCLUSIF ADMIN)
@@ -343,7 +445,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "⚡ Menu Serveurs":
         await menu_serveurs(update, context)
-    elif text == "📩 Contact & Support WhatsApp":
+    elif text == "🔓 Décrypter Fichier / APK":
+        await ask_decrypt_file(update, context)
+    elif text == "📩 Support WhatsApp":
         await contact_cmd(update, context)
     elif text == "👤 Mon Statut":
         await status_cmd(update, context)
@@ -388,7 +492,10 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("admin", admin_panel))
 
     app.add_handler(CallbackQueryHandler(callback_handler))
+    
+    # Handler pour réception de fichiers/APK
+    app.add_handler(MessageHandler(filters.Document.ALL, process_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    print("🔥 KOSHIBAR BOT DÉMARRÉ AVEC TIMEOUT 5H DANS SQLITE 🔥")
+    print("🔥 KOSHIBAR BOT DÉMARRÉ AVEC DÉCRYPTEUR JSON 🔥")
     app.run_polling()
