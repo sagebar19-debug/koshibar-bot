@@ -313,12 +313,12 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     cle_serveur = get_server_from_db(protocole)
 
     msg = (
-        f"🚀 *SERVEUR {protocole.upper()} KOSHIBAR✨*\n"
+        f"🚀 *SERVEUR {protocole.upper()} KOSHIBAR*\n"
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "📋 *Cliquez sur le bloc pour copier le lien :*\n\n"
         f"```\n{cle_serveur}\n```\n\n"
         "⏱️ *Note* : Vous pourrez régénérer ce serveur dans 5 heures.\n"
-        "⚡ *Profitez d'une connexion rapide et sécurisée !💯*"
+        "⚡ *Profitez d'une connexion rapide et sécurisée !*"
     )
     await send_func(msg, parse_mode="Markdown")
 
@@ -332,15 +332,15 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = (
-        "🖥 *PANNEAU D'ADMINISTRATION KOSHIBAR*\n"
+        "👑 *PANNEAU D'ADMINISTRATION KOSHIBAR*\n"
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "Pour gérer les serveurs, abonnements ou ajouter un fichier :"
     )
     keyboard = [
         [InlineKeyboardButton("🔑 Activer un Utilisateur", callback_data="admin_grant"), InlineKeyboardButton("🚫 Révoquer un Accès", callback_data="admin_revoke")],
         [InlineKeyboardButton("📁 Ajouter un Fichier", callback_data="admin_add_file")],
-        [InlineKeyboardButton("💡 Changer VLESS", callback_data="admin_set_vless"), InlineKeyboardButton("💡 Changer TROJAN", callback_data="admin_set_trojan")],
-        [InlineKeyboardButton("💡 Changer VMESS", callback_data="admin_set_vmess"), InlineKeyboardButton("💡 Changer SSH", callback_data="admin_set_ssh")]
+        [InlineKeyboardButton("🌐 Changer VLESS", callback_data="admin_set_vless"), InlineKeyboardButton("🛡️ Changer TROJAN", callback_data="admin_set_trojan")],
+        [InlineKeyboardButton("⚡ Changer VMESS", callback_data="admin_set_vmess"), InlineKeyboardButton("💻 Changer SSH", callback_data="admin_set_ssh")]
     ]
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
@@ -389,7 +389,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ Le serveur *{proto.upper()}* a été mis à jour avec succès !", parse_mode="Markdown")
             return
 
-    if text == "🔮 Menu Serveurs✨":
+    if text == "⚡ Menu Serveurs":
         await menu_serveurs(update, context)
     elif text == "📁 Fichiers / Configs":
         await menu_fichiers(update, context)
@@ -397,7 +397,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await contact_cmd(update, context)
     elif text == "👤 Mon Statut":
         await status_cmd(update, context)
-    elif text == "💻 Panel Admin 🖥" and user_id == ADMIN_ID:
+    elif text == "👑 Panneau Admin" and user_id == ADMIN_ID:
         await admin_panel(update, context)
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
