@@ -8,10 +8,12 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
-# 🔑 Configuration sécurisée via GitHub Secrets
-TOKEN = os.getenv("TELEGRAM_TOKEN", "8939179182:AAFSme_jksnnQ1ckjOZfMWXe6rklInFKMLY")
+# 🔑 Configuration sécurisée depuis GitHub Secrets
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "8938252970"))
 
 DB_FILE = "koshibar_v2ray.db"
@@ -51,7 +53,7 @@ def init_db():
         ("ssh", "💻 KOSHIBAR 9999 CREDITOS 💻\nHost/IP-Address : 169.58.100.47\nUSUARIO : Koshibar\nPASSWD : Koshibar\nDURACION: 21/09/2026\nLIMITE : 2\n━━━━━━━━━━━━━━━━━━━━━\nGET /app10 HTTP/1.1[crlf]Host: [rotate=koshibar-ssh-503433272017.europe-west1.run.app][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: Websocket[crlf][crlf]❌")
     ]
 
-    for protocol, link in defaultservers:
+    for protocol, link in default_servers:
         cursor.execute("INSERT OR IGNORE INTO v2ray_servers (protocol, link) VALUES (?, ?)", (protocol, link))
 
     conn.commit()
@@ -112,7 +114,6 @@ def check_user_access(user_id: int) -> tuple[bool, str]:
 # ==========================================
 
 def get_main_keyboard():
-    # Clavier fixe situé en bas de l'application (Reply Keyboard)
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton("⚡ Menu Serveurs"), KeyboardButton("👤 Mon Statut")],
@@ -224,7 +225,6 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     now = datetime.datetime.now()
 
-    # --- VERIFICATION LIMITATION 5 HEURES (SEULEMENT POUR UTILISATEUR NORMAL) ---
     if user_id != ADMIN_ID:
         if user_id not in user_sessions:
             user_sessions[user_id] = {}
@@ -340,33 +340,27 @@ async def set_ssh(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == "__main__":
     init_db()
 
+    if not TOKEN:
+        raise ValueError("ERREUR: Le TELEGRAM_TOKEN est introuvable. Configure-le dans GitHub Secrets.")
+
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Handlers généraux
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("serveur", menu_serveurs))
     app.add_handler(CommandHandler("contact", contact_cmd))
     app.add_handler(CommandHandler("statut", status_cmd))
 
-    # Commandes Admin pour modifier les serveurs
     app.add_handler(CommandHandler("setvless", set_vless))
     app.add_handler(CommandHandler("settrojan", set_trojan))
     app.add_handler(CommandHandler("setvmess", set_vmess))
     app.add_handler(CommandHandler("setssh", set_ssh))
 
-    # Commandes Admin pour gérer les abonnements des utilisateurs
     app.add_handler(CommandHandler("grant", grant_user))
     app.add_handler(CommandHandler("revoke", revoke_user))
 
-    # Gestionnaires de callbacks et boutons texte
     app.add_handler(CallbackQueryHandler(callback_handler))
-    app.add_handler(CommandHandler("Vless", get_vless_cmd if 'get_vless_cmd' in locals() else start))
-    app.add_handler(CommandHandler("Trojan", get_trojan_cmd if 'get_trojan_cmd' in locals() else start))
-    app.add_handler(CommandHandler("Vmess", get_vmess_cmd if 'get_vmess_cmd' in locals() else start))
-    app.add_handler(CommandHandler("SSH", get_ssh_cmd if 'get_ssh_cmd' in locals() else start))
 
-    from telegram.ext import MessageHandler, filters
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    print("🔥 KOSHIBAR BOT DÉMARRÉ AVEC LE NOUVEAU DESIGN 🔥")
+    print("🔥 KOSHIBAR BOT DÉMARRÉ SÉCURISÉ 🔥")
     app.run_polling()
