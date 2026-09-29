@@ -12,8 +12,8 @@ from telegram.ext import (
     filters,
 )
 
-# 🔑 Configuration sécurisée depuis GitHub Secrets
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+# 🔑 Token avec valeur de secours directe
+TOKEN = os.getenv("TELEGRAM_TOKEN", "8990075534:AAFHEjg5tNJ5RJnLGACc-3_buKjqv0lI82c")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "8938252970"))
 
 DB_FILE = "koshibar_v2ray.db"
@@ -30,7 +30,6 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
-    # Table des serveurs
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS v2ray_servers (
             protocol TEXT PRIMARY KEY,
@@ -38,7 +37,6 @@ def init_db():
         )
     """)
 
-    # Table des abonnements utilisateurs (VIP)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_subscriptions (
             user_id INTEGER PRIMARY KEY,
@@ -340,9 +338,6 @@ async def set_ssh(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == "__main__":
     init_db()
 
-    if not TOKEN:
-        raise ValueError("ERREUR: Le TELEGRAM_TOKEN est introuvable. Configure-le dans GitHub Secrets.")
-
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -362,5 +357,5 @@ if __name__ == "__main__":
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    print("🔥 KOSHIBAR BOT DÉMARRÉ SÉCURISÉ 🔥")
+    print("🔥 KOSHIBAR BOT DÉMARRÉ 🔥")
     app.run_polling()
