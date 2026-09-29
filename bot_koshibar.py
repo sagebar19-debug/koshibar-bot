@@ -2,9 +2,6 @@ import os
 import datetime
 import logging
 import sqlite3
-import json
-import re
-import base64
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
@@ -15,7 +12,7 @@ from telegram.ext import (
     filters,
 )
 
-# 🔑 Token avec valeur de secours directe
+# 🔑 Token Telegram & Admin ID
 TOKEN = os.getenv("TELEGRAM_TOKEN", "8990075534:AAFHEjg5tNJ5RJnLGACc-3_buKjqv0lI82c")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "8938252970"))
 
@@ -24,7 +21,6 @@ WHATSAPP_LINK = "https://wa.me/243986269802"
 TELEGRAM_SUPPORT = "https://t.me/koshibar"
 
 admin_states = {}
-user_states = {}
 
 # ==========================================
 # 💾 GESTION BASE DE DONNÉES SQLITE
@@ -58,12 +54,11 @@ def init_db():
     """)
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS decrypted_logs (
+        CREATE TABLE IF NOT EXISTS uploaded_files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            filename TEXT,
-            json_data TEXT,
-            decrypted_at TEXT
+            file_id TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            description TEXT
         )
     """)
 
@@ -112,16 +107,20 @@ def remove_user_subscription(user_id: int):
     conn.commit()
     conn.close()
 
-def save_decrypted_log(user_id: int, filename: str, json_data: dict):
+def add_file_to_db(file_id: str, file_name: str, description: str = ""):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute(
-        "INSERT INTO decrypted_logs (user_id, filename, json_data, decrypted_at) VALUES (?, ?, ?, ?)",
-        (user_id, filename, json.dumps(json_data, ensure_ascii=False), now_str)
-    )
+    cursor.execute("INSERT INTO uploaded_files (file_id, file_name, description) VALUES (?, ?, ?)", (file_id, file_name, description))
     conn.commit()
     conn.close()
+
+def get_all_files():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, file_id, file_name, description FROM uploaded_files")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 def check_user_access(user_id: int) -> tuple[bool, str]:
     if user_id == ADMIN_ID:
@@ -171,75 +170,12 @@ def check_and_update_cooldown(user_id: int, protocol: str) -> tuple[bool, str]:
     return True, ""
 
 # ==========================================
-# 🔓 MOTEUR DE DÉCRYPTAGE
-# ==========================================
-
-def identify_app_by_extension(filename: str) -> str:
-    ext_map = {
-        ".dark": "Dark Tunnel",
-        ".npvt": "NPV Tunnel",
-        ".npv2": "NapsternetV",
-        ".hc": "HTTP Custom",
-        ".hat": "HA Tunnel Plus",
-        ".ehi": "HTTP Injector",
-        ".sks": "Socksip Tunnel",
-        ".ziv": "ZiVPN",
-        ".nm": "Netmod",
-        ".tls": "TLS Tunnel",
-        ".apk": "Application Android APK"
-    }
-    for ext, name in ext_map.items():
-        if filename.lower().endswith(ext):
-            return name
-    return "Application VPN"
-
-def master_decryptor(file_bytes: bytes, filename: str) -> dict:
-    app_detected = identify_app_by_extension(filename)
-    raw_text = file_bytes.decode('utf-8', errors='ignore')
-
-    try:
-        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-    except Exception:
-        pass
-
-    try:
-        b64_clean = re.sub(r'[^A-Za-z0-9+/=]', '', raw_text)
-        decoded_bytes = base64.b64decode(b64_clean)
-        decoded_str = decoded_bytes.decode('utf-8', errors='ignore')
-        if "{" in decoded_str and "}" in decoded_str:
-            match = re.search(r'\{.*\}', decoded_str, re.DOTALL)
-            if match:
-                return json.loads(match.group(0))
-    except Exception:
-        pass
-
-    v2ray_links = re.findall(r'(vless://[^\s]+|vmess://[^\s]+|trojan://[^\s]+|ss://[^\s]+)', raw_text)
-    payloads = re.findall(r'(GET [^\r\n]+|POST [^\r\n]+|CONNECT [^\r\n]+|[A-Za-z0-9_.-]+:[0-9]+@)', raw_text)
-    cloud_urls = re.findall(r'https?://[^\s"]+', raw_text)
-    ips = re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', raw_text)
-
-    return {
-        "app_name": app_detected,
-        "filename": filename,
-        "type": "Decrypted Config / Cloud Payload",
-        "status": "DÉCRYPTÉ AVEC SUCCÈS",
-        "config_details": {
-            "v2ray_links": v2ray_links if v2ray_links else ["Configuration chiffrée APK/Cloud"],
-            "payloads": payloads if payloads else ["Payload masqué"],
-            "cloud_endpoints": cloud_urls if cloud_urls else ["Aucun lien externe"],
-            "server_ips": list(set(ips)) if ips else ["IP Dynamique"]
-        }
-    }
-
-# ==========================================
 # 🤖 BOT TELEGRAM LOGIQUE & CLAVIERS
 # ==========================================
 
 def get_main_keyboard(user_id: int):
     buttons = [
-        [KeyboardButton("⚡ Menu Serveurs"), KeyboardButton("🔓 Décrypter Fichier / APK")],
+        [KeyboardButton("⚡ Menu Serveurs"), KeyboardButton("📁 Fichiers / Configs")],
         [KeyboardButton("👤 Mon Statut"), KeyboardButton("📩 Contact & Support WhatsApp")]
     ]
     if user_id == ADMIN_ID:
@@ -252,8 +188,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "🔥 *BIENVENUE CHEZ KOSHIBAR BOT* 🔥\n"
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "🚀 *Votre plateforme d'accès réseau & décryptage VPN.*\n\n"
-        "👇 *Utilisez le menu ci-dessous pour naviguer facilement :*"
+        "🚀 *Votre plateforme d'accès aux serveurs VPN, SSH Premium & Fichiers de configuration.*\n\n"
+        "👇 *Utilisez le menu ci-dessous pour naviguer :*"
     )
     await update.message.reply_text(msg, reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
 
@@ -313,6 +249,26 @@ async def menu_serveurs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await send_func(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+async def menu_fichiers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    has_access, _ = check_user_access(user_id)
+    
+    if not has_access:
+        await update.message.reply_text("⛔ *Accès refusé.* Contactez l'administration sur WhatsApp pour activer votre compte.", parse_mode="Markdown")
+        return
+
+    files = get_all_files()
+    if not files:
+        await update.message.reply_text("📁 *Aucun fichier disponible pour le moment.*", parse_mode="Markdown")
+        return
+
+    msg = "📁 *FICHIERS & CONFIGURATIONS DISPONIBLES*\n━━━━━━━━━━━━━━━━━━━━━━━\n\nSélectionnez un fichier à télécharger :\n"
+    keyboard = []
+    for fid, file_tg_id, fname, desc in files:
+        keyboard.append([InlineKeyboardButton(f"📄 {fname}", callback_data=f"dl_file_{fid}")])
+
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
 async def contact_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "📩 *CONTACT & SUPPORT OFFICIEL*\n"
@@ -357,68 +313,14 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     cle_serveur = get_server_from_db(protocole)
 
     msg = (
-        f"🚀 *SERVEUR {protocole.upper()} KOSHIBAR*\n"
+        f"🚀 *SERVEUR {protocole.upper()} KOSHIBAR✨*\n"
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "📋 *Cliquez sur le bloc pour copier le lien :*\n\n"
         f"```\n{cle_serveur}\n```\n\n"
         "⏱️ *Note* : Vous pourrez régénérer ce serveur dans 5 heures.\n"
-        "⚡ *Profitez d'une connexion rapide et sécurisée !*"
+        "⚡ *Profitez d'une connexion rapide et sécurisée !💯*"
     )
     await send_func(msg, parse_mode="Markdown")
-
-# ==========================================
-# 🔓 FONCTION DE DÉCRYPTAGE
-# ==========================================
-
-async def ask_decrypt_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    has_access, _ = check_user_access(user_id)
-    if not has_access:
-        await update.message.reply_text("⛔ *Accès refusé.* Contactez l'administrateur sur WhatsApp pour activer votre compte.", parse_mode="Markdown")
-        return
-
-    user_states[user_id] = "WAITING_DECRYPT_FILE"
-    msg = (
-        "🔓 *DÉCRYPTAGE DE FICHIER / APPLICATION*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📥 Envoyez votre fichier de configuration (`.dark`, `.npvt`, `.hc`, `.hat`, `.ehi`, `.nm`, `.apk`, etc.).\n\n"
-        "⚡ *Le bot va extraire la configuration réseau au format JSON !*"
-    )
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-async def process_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    has_access, _ = check_user_access(user_id)
-    if not has_access:
-        await update.message.reply_text("⛔ *Accès refusé.*", parse_mode="Markdown")
-        return
-
-    doc = update.message.document
-    filename = doc.file_name if doc else "application.apk"
-    
-    file_obj = await context.bot.get_file(doc.file_id)
-    file_bytes = await file_obj.download_as_bytearray()
-    
-    extracted_json = master_decryptor(file_bytes, filename)
-    save_decrypted_log(user_id, filename, extracted_json)
-
-    json_formatted = json.dumps(extracted_json, indent=4, ensure_ascii=False)
-    app_name_detected = identify_app_by_extension(filename)
-
-    msg_response = (
-        "👀 **KOSHIBAR DÉCRYPTÉ** 👀\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📱 **Application / Type** : `{app_name_detected}`\n"
-        f"📄 **Fichier Source** : `{filename}`\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "```json\n"
-        f"{json_formatted}\n"
-        "```\n\n"
-        "⚡ *Configuration extraite et sauvegardée dans le système KOSHIBAR !*"
-    )
-    
-    user_states.pop(user_id, None)
-    await update.message.reply_text(msg_response, parse_mode="Markdown")
 
 # ==========================================
 # 👑 PANNEAU ADMINISTRATION
@@ -430,16 +332,29 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = (
-        "👑 *PANNEAU D'ADMINISTRATION KOSHIBAR*\n"
+        "🖥 *PANNEAU D'ADMINISTRATION KOSHIBAR*\n"
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Pour changer un serveur ou gérer les abonnements, cliquez ci-dessous :"
+        "Pour gérer les serveurs, abonnements ou ajouter un fichier :"
     )
     keyboard = [
         [InlineKeyboardButton("🔑 Activer un Utilisateur", callback_data="admin_grant"), InlineKeyboardButton("🚫 Révoquer un Accès", callback_data="admin_revoke")],
-        [InlineKeyboardButton("🌐 Changer VLESS", callback_data="admin_set_vless"), InlineKeyboardButton("🛡️ Changer TROJAN", callback_data="admin_set_trojan")],
-        [InlineKeyboardButton("⚡ Changer VMESS", callback_data="admin_set_vmess"), InlineKeyboardButton("💻 Changer SSH", callback_data="admin_set_ssh")]
+        [InlineKeyboardButton("📁 Ajouter un Fichier", callback_data="admin_add_file")],
+        [InlineKeyboardButton("💡 Changer VLESS", callback_data="admin_set_vless"), InlineKeyboardButton("💡 Changer TROJAN", callback_data="admin_set_trojan")],
+        [InlineKeyboardButton("💡 Changer VMESS", callback_data="admin_set_vmess"), InlineKeyboardButton("💡 Changer SSH", callback_data="admin_set_ssh")]
     ]
     await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+async def document_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+
+    if user_id == ADMIN_ID and admin_states.get(user_id) == "WAITING_FILE":
+        admin_states.pop(user_id, None)
+        doc = update.message.document
+        file_id = doc.file_id
+        file_name = doc.file_name or "fichier_config"
+
+        add_file_to_db(file_id, file_name)
+        await update.message.reply_text(f"✅ *Fichier ajouté avec succès !*\n📄 Nom : `{file_name}`", parse_mode="Markdown")
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -474,15 +389,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ Le serveur *{proto.upper()}* a été mis à jour avec succès !", parse_mode="Markdown")
             return
 
-    if text == "⚡ Menu Serveurs":
+    if text == "🔮 Menu Serveurs✨":
         await menu_serveurs(update, context)
-    elif text == "🔓 Décrypter Fichier / APK":
-        await ask_decrypt_file(update, context)
+    elif text == "📁 Fichiers / Configs":
+        await menu_fichiers(update, context)
     elif text == "📩 Contact & Support WhatsApp":
         await contact_cmd(update, context)
     elif text == "👤 Mon Statut":
         await status_cmd(update, context)
-    elif text == "👑 Panneau Admin" and user_id == ADMIN_ID:
+    elif text == "💻 Panel Admin 🖥" and user_id == ADMIN_ID:
         await admin_panel(update, context)
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -496,6 +411,20 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data in ["get_vless", "get_trojan", "get_vmess", "get_ssh"]:
         proto = data.replace("get_", "")
         await fournir_protocole(update, context, proto)
+
+    elif data.startswith("dl_file_"):
+        file_db_id = int(data.replace("dl_file_", ""))
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT file_id, file_name FROM uploaded_files WHERE id = ?", (file_db_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            file_id, file_name = row
+            await context.bot.send_document(chat_id=user_id, document=file_id, caption=f"📄 *Fichier :* `{file_name}`", parse_mode="Markdown")
+        else:
+            await query.message.reply_text("❌ Fichier introuvable.")
     
     elif user_id == ADMIN_ID:
         if data == "admin_grant":
@@ -505,6 +434,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "admin_revoke":
             admin_states[user_id] = "WAITING_REVOKE"
             await query.message.reply_text("🚫 *Révocation d'accès*\n\nEnvoyez uniquement l'ID Telegram du client à bloquer.\n👉 *Exemple* : `123456789`", parse_mode="Markdown")
+
+        elif data == "admin_add_file":
+            admin_states[user_id] = "WAITING_FILE"
+            await query.message.reply_text("📁 *Ajout de Fichier*\n\nEnvoyez le document/fichier (`.dark`, `.npvt`, `.hc`, `.apk`, etc.) à ajouter à la liste.", parse_mode="Markdown")
         
         elif data.startswith("admin_set_"):
             proto = data.replace("admin_set_", "")
@@ -518,13 +451,13 @@ if __name__ == "__main__":
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("serveur", menu_serveurs))
+    app.add_handler(CommandHandler("fichiers", menu_fichiers))
     app.add_handler(CommandHandler("contact", contact_cmd))
     app.add_handler(CommandHandler("statut", status_cmd))
     app.add_handler(CommandHandler("admin", admin_panel))
 
     app.add_handler(CallbackQueryHandler(callback_handler))
-    
-    app.add_handler(MessageHandler(filters.Document.ALL, process_document))
+    app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     print("🔥 KOSHIBAR BOT DÉMARRÉ 🔥")
