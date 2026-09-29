@@ -20,7 +20,7 @@ DB_FILE = "koshibar_v2ray.db"
 WHATSAPP_LINK = "https://wa.me/243986269802"
 TELEGRAM_SUPPORT = "https://t.me/koshibar"
 
-user_sessions = {}
+admin_states = {}  # Stocke l'état d'attente des commandes admin
 
 # ==========================================
 # 💾 GESTION BASE DE DONNÉES SQLITE
@@ -30,6 +30,7 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
+    # Table des serveurs
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS v2ray_servers (
             protocol TEXT PRIMARY KEY,
@@ -37,6 +38,7 @@ def init_db():
         )
     """)
 
+    # Table des abonnements utilisateurs (VIP)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_subscriptions (
             user_id INTEGER PRIMARY KEY,
@@ -44,12 +46,21 @@ def init_db():
         )
     """)
 
-    # Initialisation avec des emplacements vides
+    # Table des temporisations 5h pour les utilisateurs
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_cooldowns (
+            user_id INTEGER,
+            protocol TEXT,
+            next_access_time TEXT,
+            PRIMARY KEY (user_id, protocol)
+        )
+    """)
+
     default_servers = [
-        ("vless", "Aucun serveur VLESS configuré. Utilisez /setvless <lien> sur Telegram."),
-        ("trojan", "Aucun serveur TROJAN configuré. Utilisez /settrojan <lien> sur Telegram."),
-        ("vmess", "Aucun serveur VMESS configuré. Utilisez /setvmess <lien> sur Telegram."),
-        ("ssh", "Aucun serveur SSH configuré. Utilisez /setssh <texte> sur Telegram.")
+        ("vless", "Aucun serveur VLESS configuré."),
+        ("trojan", "Aucun serveur TROJAN configuré."),
+        ("vmess", "Aucun serveur VMESS configuré."),
+        ("ssh", "Aucun serveur SSH configuré.")
     ]
 
     for protocol, link in default_servers:
@@ -86,6 +97,7 @@ def remove_user_subscription(user_id: int):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM user_subscriptions WHERE user_id = ?", (user_id,))
+    cursor.execute("DELETE FROM user_cooldowns WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
 
@@ -108,27 +120,59 @@ def check_user_access(user_id: int) -> tuple[bool, str]:
 
     return True, f"VALIDE JUSQU'AU {exp_date.strftime('%d/%m/%Y à %H:%M')}"
 
+# --- GESTION DU DÉLAI DE 5 HEURES DANS LA BASE DE DONNÉES ---
+def check_and_update_cooldown(user_id: int, protocol: str) -> tuple[bool, str]:
+    if user_id == ADMIN_ID:
+        return True, ""  # L'administrateur n'a aucune attente
+
+    now = datetime.datetime.now()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT next_access_time FROM user_cooldowns WHERE user_id = ? AND protocol = ?", (user_id, protocol))
+    row = cursor.fetchone()
+
+    if row:
+        next_time = datetime.datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
+        if now < next_time:
+            remaining = next_time - now
+            hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+            minutes, _ = divmod(remainder, 60)
+            conn.close()
+            return False, f"{hours}h {minutes}min"
+
+    # Mise à jour du délai pour 5 heures après la récupération
+    next_access = now + datetime.timedelta(hours=5)
+    next_str = next_access.strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("INSERT OR REPLACE INTO user_cooldowns (user_id, protocol, next_access_time) VALUES (?, ?, ?)", (user_id, protocol, next_str))
+    
+    conn.commit()
+    conn.close()
+    return True, ""
+
 # ==========================================
-# 🤖 BOT TELEGRAM LOGIQUE & STYLES
+# 🤖 BOT TELEGRAM LOGIQUE & CLAVIERS
 # ==========================================
 
-def get_main_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("⚡ Menu Serveurs"), KeyboardButton("👤 Mon Statut")],
-            [KeyboardButton("📩 Contact & Support WhatsApp")]
-        ],
-        resize_keyboard=True
-    )
+def get_main_keyboard(user_id: int):
+    buttons = [
+        [KeyboardButton("⚡ Menu Serveurs"), KeyboardButton("👤 Mon Statut")],
+        [KeyboardButton("📩 Contact & Support WhatsApp")]
+    ]
+    if user_id == ADMIN_ID:
+        buttons.append([KeyboardButton("👑 Panneau Admin")])
+        
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
     msg = (
         "🔥 *BIENVENUE CHEZ KOSHIBAR BOT* 🔥\n"
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "🚀 *Votre plateforme d'accès réseau haut débit.*\n\n"
         "👇 *Utilisez le menu ci-dessous pour naviguer facilement :*"
     )
-    await update.message.reply_text(msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    await update.message.reply_text(msg, reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
 
 async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -212,33 +256,25 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         user_id = update.message.from_user.id
         send_func = update.message.reply_text
 
+    # 1. Vérification si l'utilisateur est autorisé (Abonnement valide)
     has_access, _ = check_user_access(user_id)
     if not has_access:
         await send_func("⛔ *Votre accès a expiré ou n'est pas actif.*", parse_mode="Markdown")
         return
 
-    now = datetime.datetime.now()
+    # 2. Vérification de la limitation de 5 heures
+    can_get, wait_time = check_and_update_cooldown(user_id, protocole)
+    if not can_get:
+        msg_wait = (
+            f"⏳ *LIMITE D'ACCÈS ATTEINTE*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"⚠️ Vous avez déjà récupéré un serveur *{protocole.upper()}* récemment.\n\n"
+            f"⏱️ Veuillez patienter encore : *{wait_time}* avant la prochaine génération."
+        )
+        await send_func(msg_wait, parse_mode="Markdown")
+        return
 
-    if user_id != ADMIN_ID:
-        if user_id not in user_sessions:
-            user_sessions[user_id] = {}
-
-        if protocole in user_sessions[user_id]:
-            expiration = user_sessions[user_id][protocole]
-            if now < expiration:
-                temps_restant = expiration - now
-                heures, reste = divmod(temps_restant.seconds, 3600)
-                minutes, _ = divmod(reste, 60)
-                
-                await send_func(
-                    f"⚠️ *Compte encore actif !*\n\n"
-                    f"⏱️ Prochaine génération disponible dans : *{heures}h {minutes}min*",
-                    parse_mode="Markdown"
-                )
-                return
-        
-        user_sessions[user_id][protocole] = now + datetime.timedelta(hours=5)
-
+    # 3. Récupération et envoi du serveur
     cle_serveur = get_server_from_db(protocole)
 
     msg = (
@@ -246,89 +282,99 @@ async def fournir_protocole(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "📋 *Cliquez sur le bloc pour copier le lien :*\n\n"
         f"```\n{cle_serveur}\n```\n\n"
+        "⏱️ *Note* : Vous pourrez régénérer ce serveur dans 5 heures.\n"
         "⚡ *Profitez d'une connexion rapide et sécurisée !*"
     )
     await send_func(msg, parse_mode="Markdown")
 
+# ==========================================
+# 👑 PANNEAU ADMINISTRATION (EXCLUSIF ADMIN)
+# ==========================================
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        return
+
+    msg = (
+        "👑 *PANNEAU D'ADMINISTRATION KOSHIBAR*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Choisissez une action à effectuer :"
+    )
+    keyboard = [
+        [InlineKeyboardButton("🔑 Activer un Utilisateur", callback_data="admin_grant"), InlineKeyboardButton("🚫 Révoquer un Accès", callback_data="admin_revoke")],
+        [InlineKeyboardButton("🌐 Changer VLESS", callback_data="admin_set_vless"), InlineKeyboardButton("🛡️ Changer TROJAN", callback_data="admin_set_trojan")],
+        [InlineKeyboardButton("⚡ Changer VMESS", callback_data="admin_set_vmess"), InlineKeyboardButton("💻 Changer SSH", callback_data="admin_set_ssh")]
+    ]
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
     text = update.message.text
+
+    if user_id == ADMIN_ID and user_id in admin_states:
+        state = admin_states.pop(user_id)
+        
+        if state == "WAITING_GRANT":
+            try:
+                parts = text.split()
+                target_id = int(parts[0])
+                days = int(parts[1])
+                set_user_subscription(target_id, days)
+                await update.message.reply_text(f"✅ *Succès !* L'utilisateur `{target_id}` a reçu un accès valide pour *{days} jours*.", parse_mode="Markdown")
+            except Exception:
+                await update.message.reply_text("❌ Format incorrect. Utilisez : `ID JOURS` (ex: `123456789 30`)", parse_mode="Markdown")
+            return
+
+        elif state == "WAITING_REVOKE":
+            try:
+                target_id = int(text.strip())
+                remove_user_subscription(target_id)
+                await update.message.reply_text(f"🚫 Accès révoqué pour l'utilisateur `{target_id}`.", parse_mode="Markdown")
+            except Exception:
+                await update.message.reply_text("❌ Format incorrect. Envoyez simplement le chiffre de l'ID.", parse_mode="Markdown")
+            return
+
+        elif state.startswith("WAITING_SET_"):
+            proto = state.replace("WAITING_SET_", "").lower()
+            update_server_in_db(proto, text.strip())
+            await update.message.reply_text(f"✅ Le serveur *{proto.upper()}* a été mis à jour avec succès !", parse_mode="Markdown")
+            return
+
     if text == "⚡ Menu Serveurs":
         await menu_serveurs(update, context)
     elif text == "📩 Contact & Support WhatsApp":
         await contact_cmd(update, context)
     elif text == "👤 Mon Statut":
         await status_cmd(update, context)
+    elif text == "👑 Panneau Admin" and user_id == ADMIN_ID:
+        await admin_panel(update, context)
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if query.data == "menu_serveurs":
+    user_id = query.from_user.id
+    data = query.data
+    await query.answer()
+
+    if data == "menu_serveurs":
         await menu_serveurs(update, context)
-    elif query.data in ["get_vless", "get_trojan", "get_vmess", "get_ssh"]:
-        proto = query.data.replace("get_", "")
+    elif data in ["get_vless", "get_trojan", "get_vmess", "get_ssh"]:
+        proto = data.replace("get_", "")
         await fournir_protocole(update, context, proto)
-
-# ==========================================
-# 👑 COMMANDES ADMINISTRATEUR EXCLUSIVES
-# ==========================================
-
-async def grant_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-
-    if len(context.args) < 2:
-        await update.message.reply_text("💡 *Usage* : `/grant <ID_TELEGRAM> <JOURS>`\nExemple : `/grant 123456789 30`", parse_mode="Markdown")
-        return
-
-    try:
-        target_id = int(context.args[0])
-        days = int(context.args[1])
-        set_user_subscription(target_id, days)
-        await update.message.reply_text(f"✅ *Succès !* L'utilisateur `{target_id}` a reçu un accès valide pour *{days} jours*.", parse_mode="Markdown")
-    except ValueError:
-        await update.message.reply_text("❌ L'ID et le nombre de jours doivent être des chiffres.", parse_mode="Markdown")
-
-async def revoke_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-
-    if not context.args:
-        await update.message.reply_text("💡 *Usage* : `/revoke <ID_TELEGRAM>`", parse_mode="Markdown")
-        return
-
-    try:
-        target_id = int(context.args[0])
-        remove_user_subscription(target_id)
-        await update.message.reply_text(f"🚫 Accès révoqué pour l'utilisateur `{target_id}`.", parse_mode="Markdown")
-    except ValueError:
-        await update.message.reply_text("❌ L'ID doit être un chiffre.", parse_mode="Markdown")
-
-async def set_server(update: Update, context: ContextTypes.DEFAULT_TYPE, protocole: str):
-    user_id = update.message.from_user.id
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("⛔ Seul l'administrateur KOSHIBAR peut modifier les serveurs !")
-        return
-
-    if not context.args:
-        await update.message.reply_text(f"Exemple : `/set{protocole} votre_serveur_ici`", parse_mode="Markdown")
-        return
-
-    nouveau_contenu = update.message.text.split(f"/set{protocole}", 1)[1].strip()
-    update_server_in_db(protocole, nouveau_contenu)
-    await update.message.reply_text(f"✅ Le serveur *{protocole.upper()}* a été mis à jour avec succès !", parse_mode="Markdown")
-
-async def set_vless(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await set_server(update, context, "vless")
-
-async def set_trojan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await set_server(update, context, "trojan")
-
-async def set_vmess(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await set_server(update, context, "vmess")
-
-async def set_ssh(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await set_server(update, context, "ssh")
+    
+    elif user_id == ADMIN_ID:
+        if data == "admin_grant":
+            admin_states[user_id] = "WAITING_GRANT"
+            await query.message.reply_text("🔑 *Activation d'accès*\n\nEnvoyez l'ID Telegram du client et le nombre de jours séparés par un espace.\n👉 *Exemple* : `123456789 30`", parse_mode="Markdown")
+        
+        elif data == "admin_revoke":
+            admin_states[user_id] = "WAITING_REVOKE"
+            await query.message.reply_text("🚫 *Révocation d'accès*\n\nEnvoyez uniquement l'ID Telegram du client à bloquer.\n👉 *Exemple* : `123456789`", parse_mode="Markdown")
+        
+        elif data.startswith("admin_set_"):
+            proto = data.replace("admin_set_", "")
+            admin_states[user_id] = f"WAITING_SET_{proto.upper()}"
+            await query.message.reply_text(f"📝 *Mise à jour du serveur {proto.upper()}*\n\nCollez et envoyez le nouveau lien/configuration du serveur ci-dessous :", parse_mode="Markdown")
 
 if __name__ == "__main__":
     init_db()
@@ -339,18 +385,10 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("serveur", menu_serveurs))
     app.add_handler(CommandHandler("contact", contact_cmd))
     app.add_handler(CommandHandler("statut", status_cmd))
-
-    app.add_handler(CommandHandler("setvless", set_vless))
-    app.add_handler(CommandHandler("settrojan", set_trojan))
-    app.add_handler(CommandHandler("setvmess", set_vmess))
-    app.add_handler(CommandHandler("setssh", set_ssh))
-
-    app.add_handler(CommandHandler("grant", grant_user))
-    app.add_handler(CommandHandler("revoke", revoke_user))
+    app.add_handler(CommandHandler("admin", admin_panel))
 
     app.add_handler(CallbackQueryHandler(callback_handler))
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    print("🔥 KOSHIBAR BOT DÉMARRÉ 🔥")
+    print("🔥 KOSHIBAR BOT DÉMARRÉ AVEC TIMEOUT 5H DANS SQLITE 🔥")
     app.run_polling()
