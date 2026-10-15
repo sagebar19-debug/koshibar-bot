@@ -1,21 +1,21 @@
 name: Run Koshibar Bot
 
 on:
-  push:
-    branches: [ "principal" ]
-  workflow_dispatch:
+  workflow_dispatch: # Permet le déclenchement manuel
+  schedule:
+    - cron: '0 */5 * * *' # Relance automatiquement le bot toutes les 5 heures
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
