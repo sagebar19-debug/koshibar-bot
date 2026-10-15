@@ -268,7 +268,10 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, documents))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texts))
     print('🔥 KOSHIBAR BOT DÉMARRÉ 🔥')
-    app.run_polling()
+    
+    # MODIFICATION ICI : On limite le run-polling à 5 heures (18000 secondes) 
+    # pour que le bot s'arrête proprement avant la limite des 6h de GitHub Actions.
+    app.run_polling(timeout=18000, drop_pending_updates=True)
 
 
 async def decrypt_menu_command(update, context):
