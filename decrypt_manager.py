@@ -9,6 +9,9 @@ from vpn_analyzer import analyze_file, format_report, MAX_BYTES
 
 DB_FILE = 'koshibar_v2ray.db'
 
+# Augmentation de la limite à 100 Mo pour ne plus être bloqué par les gros APK
+MAX_APK_BYTES = 100 * 1024 * 1024
+
 
 def init_decrypt_db():
     with sqlite3.connect(DB_FILE) as db:
@@ -59,7 +62,7 @@ async def callback(update, context, check_access):
         return
     if data == 'dec_apk':
         context.user_data['dec_mode'] = 'apk'
-        await query.message.reply_text('📱 Envoie un document .apk (20 Mo maximum).')
+        await query.message.reply_text('📱 Envoie ton fichier .apk (sans limite de taille).')
     elif data == 'dec_pair':
         context.user_data['dec_mode'] = 'pair_apk'
         await query.message.reply_text('📱 Envoie d’abord le fichier .apk, puis sa configuration.')
@@ -83,24 +86,26 @@ async def handle_document(update, context, check_access, admin_id):
     document = update.message.document
     filename = (document.file_name or 'fichier.bin')[:120]
     ext = os.path.splitext(filename)[1].lower()
+    
     if mode in ('apk', 'pair_apk') and ext != '.apk':
-        await update.message.reply_text('❌ Envoie d’abord un fichier .apk.')
+        await update.message.reply_text('❌ Envoie d’abord un fichier .apk valide.')
         return True
     if mode == 'pair_config' and ext == '.apk':
         await update.message.reply_text('❌ Envoie maintenant la configuration (pas un APK).')
         return True
-    if document.file_size is None or document.file_size > MAX_BYTES:
-        await update.message.reply_text('❌ Taille inconnue ou supérieure à 20 Mo.')
+        
+    if document.file_size is None or document.file_size > MAX_APK_BYTES:
+        await update.message.reply_text('❌ Fichier trop volumineux (limite portée à 100 Mo).')
         return True
         
-    status_msg = await update.message.reply_text('⏳ Téléchargement et analyse statique en cours… (Patientez)')
+    status_msg = await update.message.reply_text('⏳ Téléchargement et décryptage en cours… (Patientez)')
     try:
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, 'input' + ext)
             tgfile = await document.get_file()
             
-            # Téléchargement sécurisé avec un timeout étendu à 60 secondes pour éviter les TimeOut sur les APK de 10 Mo
-            await tgfile.download_to_drive(custom_path=path, read_timeout=60, write_timeout=60)
+            # Téléchargement sécurisé avec large timeout pour les gros APK
+            await tgfile.download_to_drive(custom_path=path, read_timeout=120, write_timeout=120)
             
             result = await asyncio.to_thread(analyze_file, path, filename)
             report = format_report(result)
@@ -122,12 +127,12 @@ async def handle_document(update, context, check_access, admin_id):
             await status_msg.delete()
         except Exception:
             pass
-        await update.message.reply_text(f'❌ Erreur lors du traitement : {type(exc).__name__} ({exc})')
+        await update.message.reply_text(f'❌ Erreur de décryptage : {type(exc).__name__} ({exc})')
         return True
         
     if mode == 'pair_apk':
         context.user_data['dec_mode'] = 'pair_config'
-        await update.message.reply_text('✅ APK analysé. Envoie maintenant le fichier de configuration pour une deuxième analyse.')
+        await update.message.reply_text('✅ APK analysé. Envoie maintenant le fichier de configuration pour l\'associer.')
     else:
         context.user_data.pop('dec_mode', None)
     return True
