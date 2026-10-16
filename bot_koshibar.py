@@ -1,8 +1,10 @@
-"""KOSHIBAR BOT : serveurs, abonnements, fichiers et analyse VPN."""
+here"""KOSHIBAR BOT : serveurs, abonnements, fichiers et analyse VPN."""
 import os
 import datetime
 import sqlite3
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+import telegram.error
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from decrypt_manager import init_decrypt_db, menu as decrypt_menu, callback as decrypt_callback, handle_document as decrypt_document, admin_history, admin_report
 
@@ -109,7 +111,6 @@ async def send_protocol(update, context, proto):
     if not allowed:
         await update.effective_message.reply_text(f'⏳ {proto.upper()} : réessaie dans {wait}.')
         return
-    # Envoi en texte brut pour éviter les erreurs Markdown sur les liens VPN.
     await update.effective_message.reply_text(f'🚀 SERVEUR {proto.upper()} KOSHIBAR\n\n{link[:3800]}\n\n⏱️ Prochain accès dans 5 heures.')
 
 
@@ -268,7 +269,17 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, documents))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texts))
     print('🔥 KOSHIBAR BOT DÉMARRÉ 🔥')
-    app.run_polling()
+    
+    # Boucle sécurisée pour garder ton ancien script intact tout en évitant les crashs
+    while True:
+        try:
+            app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+        except telegram.error.Conflict:
+            print("⚠️ Conflit détecté (autre instance active). Attente de 15 secondes...")
+            time.sleep(15)
+        except Exception as e:
+            print(f"⚠️ Erreur inattendue : {e}. Redémarrage dans 10 secondes...")
+            time.sleep(10)
 
 
 async def decrypt_menu_command(update, context):
