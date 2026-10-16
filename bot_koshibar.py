@@ -269,13 +269,13 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texts))
     print('🔥 KOSHIBAR BOT DÉMARRÉ 🔥')
     
-    # Système de reconnexion automatique en cas de micro-coupure réseau sur GitHub
+    # Gestion anti-conflit et reconnexion automatique en cas de double instance
     while True:
         try:
             app.run_polling(drop_pending_updates=True)
         except Exception as e:
-            print(f"⚠️ Reconnexion automatique suite à une coupure : {e}")
-            time.sleep(3)
+            print(f"⚠️ Alerte bot : {e}. Nouvelle tentative dans 10 secondes...")
+            time.sleep(10)
 
 
 async def decrypt_menu_command(update, context):
