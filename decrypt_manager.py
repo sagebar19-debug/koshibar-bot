@@ -92,15 +92,25 @@ async def handle_document(update, context, check_access, admin_id):
     if document.file_size is None or document.file_size > MAX_BYTES:
         await update.message.reply_text('❌ Taille inconnue ou supérieure à 20 Mo.')
         return True
-    await update.message.reply_text('⏳ Analyse statique en cours…')
+        
+    status_msg = await update.message.reply_text('⏳ Téléchargement et analyse statique en cours… (Patientez)')
     try:
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, 'input' + ext)
             tgfile = await document.get_file()
-            await tgfile.download_to_drive(custom_path=path)
+            
+            # Téléchargement sécurisé avec un timeout étendu à 60 secondes pour éviter les TimeOut sur les APK de 10 Mo
+            await tgfile.download_to_drive(custom_path=path, read_timeout=60, write_timeout=60)
+            
             result = await asyncio.to_thread(analyze_file, path, filename)
             report = format_report(result)
             _record(update.effective_user.id, filename, result['type'], report)
+            
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+                
             await update.message.reply_text(report)
             if update.effective_user.id != admin_id:
                 try:
@@ -108,8 +118,13 @@ async def handle_document(update, context, check_access, admin_id):
                 except Exception:
                     pass
     except Exception as exc:
-        await update.message.reply_text(f'❌ Analyse impossible : {type(exc).__name__}.')
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await update.message.reply_text(f'❌ Erreur lors du traitement : {type(exc).__name__} ({exc})')
         return True
+        
     if mode == 'pair_apk':
         context.user_data['dec_mode'] = 'pair_config'
         await update.message.reply_text('✅ APK analysé. Envoie maintenant le fichier de configuration pour une deuxième analyse.')
