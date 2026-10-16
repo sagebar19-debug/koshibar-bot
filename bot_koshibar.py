@@ -1,12 +1,12 @@
-here"""KOSHIBAR BOT : serveurs, abonnements, fichiers et analyse VPN."""
-import os
+"""KOSHIBAR BOT : serveurs, abonnements, fichiers et analyse VPN."""
 import datetime
+import os
 import sqlite3
 import time
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update
 import telegram.error
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from decrypt_manager import init_decrypt_db, menu as decrypt_menu, callback as decrypt_callback, handle_document as decrypt_document, admin_history, admin_report
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
+from decrypt_manager import admin_history, admin_report, callback as decrypt_callback, handle_document as decrypt_document, init_decrypt_db, menu as decrypt_menu
 
 TOKEN = os.environ['TELEGRAM_TOKEN']
 ADMIN_ID = int(os.environ['ADMIN_ID'])
@@ -259,6 +259,10 @@ async def callbacks(update, context):
             await query.message.reply_text(prompt)
 
 
+async def decrypt_menu_command(update, context):
+    await decrypt_menu(update, context, check_user_access)
+
+
 def main():
     init_db()
     init_decrypt_db()
@@ -269,8 +273,7 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, documents))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texts))
     print('🔥 KOSHIBAR BOT DÉMARRÉ 🔥')
-    
-    # Boucle sécurisée pour garder ton ancien script intact tout en évitant les crashs
+
     while True:
         try:
             app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
@@ -280,10 +283,6 @@ def main():
         except Exception as e:
             print(f"⚠️ Erreur inattendue : {e}. Redémarrage dans 10 secondes...")
             time.sleep(10)
-
-
-async def decrypt_menu_command(update, context):
-    await decrypt_menu(update, context, check_user_access)
 
 
 if __name__ == '__main__':
