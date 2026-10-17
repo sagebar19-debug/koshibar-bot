@@ -118,7 +118,7 @@ async def handle_document(update, context, check_access, admin_id):
                     pass
     except BadRequest as exc:
         if 'too big' in str(exc).lower():
-            await update.message.reply_text('❌ Telegram refuse le téléchargement de ce fichier : limite de 20 Mo de l’API Bot standard. Un serveur Bot API local ou un lien externe pris en charge est nécessaire pour les gros APK.')
+            await update.message.reply_text('❌ Telegram refuse le téléchargement de ce fichier : limite de 20 Mo de l’API Bot standard.')
         else:
             await update.message.reply_text('❌ Telegram a refusé ce fichier. Vérifie son format et réessaie.')
         return True
