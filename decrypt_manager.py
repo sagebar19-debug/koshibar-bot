@@ -1,20 +1,47 @@
-"""Réception des fichiers VPN, accès par abonnement et historique admin."""
+"""Gestion Telegram des décryptages directs de fichiers VPN."""
 import asyncio
 import datetime
 import os
 import sqlite3
 import tempfile
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import BadRequest, TimedOut, NetworkError
-from vpn_analyzer import analyze_file, format_report, EXTENSIONS, FORMAT_LIST, MAX_BYTES
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes
+from vpn_analyzer import analyze_file, format_report, MAX_BYTES
 
 DB_FILE = 'koshibar_v2ray.db'
-WELCOME = ('🔓 KOSHIBAR VPN ANALYZER\n\n'
-           '👋 Welcome to KOSHIBAR DECODEZ 👁\n\n'
-           '🤖 Utilisable en privé ou dans un groupe.\n'
-           '📂 Supported formats:\n' + FORMAT_LIST +
-           '\n\n📥 Send your file to decode.\n'
-           '⚠️ Analyse des données accessibles ; le déchiffrement propriétaire n’est pas garanti.')
+
+# Liste des formats pris en charge pour l'affichage de bienvenue
+SUPPORTED_FORMATS_TEXT = """👋 Welcome to KOSHIBAR DECODEZ 👁
+
+🤖 Add this bot to your grp to help in decryption there! And you can use it personally too!
+
+📂 Supported formats:
+[EHI] - .ehi, .ehil
+[HC] - .hc
+[NPVT] - .npvt, .npvtsub, .npv4
+[DARK] - .dark
+[SSC] - .ssc
+[EV2RAY] - .v2
+[HTTP TWEAK] - .ht , httptweak://
+[SIP] - .sip
+[HAT] - .hat
+[NETMOD] - .nm
+[OPENTUNNEL] - .tnl
+[SLIPNET] - .slipnet
+[TLS] - .tls
+[LINKLAYER] - .lnk
+[MINA] - .mina, .oc
+[SANDOK] - Extensions multiples (.aura, .bcl, .dark, etc.)
+[RENZ] - .tcx, .7net, .ihome, etc.
+[PRINCE] - .apnalite, .bdnet, etc.
+[STARK] - .stk
+[ZIV] - .ziv
+[WYR] - .wyr
+[INT] - .int
+[EUT] - .eut
+[NOOBDEV] - .maya, .roy, .ar
+
+📥 Send your file to decode."""
 
 
 def init_decrypt_db():
@@ -25,88 +52,96 @@ def init_decrypt_db():
             filename TEXT NOT NULL,
             file_type TEXT NOT NULL,
             report TEXT NOT NULL,
-            created_at TEXT NOT NULL)''')
+            created_at TEXT NOT NULL
+        )''')
 
 
-def _record(uid, name, extension, report):
+def _record(user_id, filename, file_type, report):
     with sqlite3.connect(DB_FILE) as db:
         db.execute('INSERT INTO decrypt_history (user_id,filename,file_type,report,created_at) VALUES (?,?,?,?,?)',
-                   (uid, name, extension, report, datetime.datetime.now(datetime.timezone.utc).isoformat()))
+                   (user_id, filename, file_type, report, datetime.datetime.now(datetime.timezone.utc).isoformat()))
 
 
-async def menu(update, context, check_access):
+async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE, check_access):
     ok, details = check_access(update.effective_user.id)
     if not ok:
         await update.effective_message.reply_text(f'⛔ Accès refusé : {details}\n🆔 ID : {update.effective_user.id}')
         return
-    context.user_data['dec_mode'] = 'config'
-    await update.effective_message.reply_text(WELCOME, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton('📜 Mes analyses', callback_data='dec_mine')],
-        [InlineKeyboardButton('❌ Annuler', callback_data='dec_cancel')]]))
+    
+    # Active directement le mode décryptage global sans demander de choisir une option
+    context.user_data['dec_mode'] = 'direct_file'
+    
+    msg = f"🔓 KOSHIBAR VPN ANALYZER\nFichier autorisé :\n\n{SUPPORTED_FORMATS_TEXT}"
+    await update.effective_message.reply_text(msg)
 
 
-async def callback(update, context, check_access):
+async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE, check_access):
     query = update.callback_query
     await query.answer()
-    if query.data == 'dec_cancel':
+    data = query.data
+    if data == 'dec_cancel':
         context.user_data.pop('dec_mode', None)
-        await query.message.reply_text('❌ Analyse annulée.')
+        await query.message.reply_text('❌ Opération annulée.')
         return
     ok, details = check_access(query.from_user.id)
     if not ok:
-        await query.message.reply_text(f'⛔ {details}')
+        await query.message.reply_text(f'⛔ Accès refusé : {details}')
         return
-    if query.data == 'dec_mine':
-        with sqlite3.connect(DB_FILE) as db:
-            rows = db.execute('SELECT filename,created_at FROM decrypt_history WHERE user_id=? ORDER BY id DESC LIMIT 10',
-                              (query.from_user.id,)).fetchall()
-        await query.message.reply_text('📜 MES ANALYSES\n' + ('\n'.join(f'📁 {name[:65]} — {date[:16]} UTC' for name,date in rows) if rows else 'Aucune analyse.'))
 
 
-async def handle_document(update, context, check_access, admin_id):
-    doc = update.message.document
-    name = (doc.file_name or 'inconnu')[:120]
-    ext = os.path.splitext(name)[1].lower()
-    if ext not in EXTENSIONS:
-        if context.user_data.get('dec_mode'):
-            await update.message.reply_text('❌ Format non autorisé. Envoie un fichier de la liste affichée.')
-            return True
-        return False
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE, check_access, admin_id):
+    # Désormais, dès que l'utilisateur clique sur "DÉCRYPTAGE VPN", le mode est actif et il peut envoyer son fichier directement
     ok, details = check_access(update.effective_user.id)
     if not ok:
-        await update.message.reply_text(f'⛔ Accès refusé : {details}\n🆔 {update.effective_user.id}')
+        await update.message.reply_text(f'⛔ Accès refusé : {details}')
         return True
-    if doc.file_size is None or doc.file_size > MAX_BYTES:
-        await update.message.reply_text('❌ Taille trop grande ou inconnue. Limite de téléchargement Bot API standard : 20 Mo. Essaie un fichier plus petit.')
+        
+    document = update.message.document
+    if not document:
+        return False
+        
+    filename = (document.file_name or 'config.bin')[:120]
+    
+    if document.file_size is None or document.file_size > 20 * 1024 * 1024:
+        await update.message.reply_text('❌ Fichier trop volumineux (limite de 20 Mo de l’API Telegram).')
         return True
-    await update.message.reply_text('🔍 Analyse du fichier VPN en cours…')
+        
+    status_msg = await update.message.reply_text('⏳ Décryptage et extraction des serveurs en cours…')
     try:
-        with tempfile.TemporaryDirectory() as folder:
-            path = os.path.join(folder, 'config' + ext)
-            for attempt in range(3):
-                try:
-                    tgfile = await doc.get_file(read_timeout=90, connect_timeout=30)
-                    await tgfile.download_to_drive(custom_path=path, read_timeout=120, connect_timeout=30)
-                    break
-                except (TimedOut, NetworkError):
-                    if attempt == 2:
-                        raise
-                    await asyncio.sleep(2 * (attempt + 1))
-            result = await asyncio.to_thread(analyze_file, path)
-        report = format_report(result)
-        _record(update.effective_user.id, name, ext, report)
-        await update.message.reply_text(f'📄 {name}\n\n{report}'[:4000])
-        if update.effective_user.id != admin_id:
+        with tempfile.TemporaryDirectory() as directory:
+            ext = os.path.splitext(filename)[1].lower()
+            if not ext:
+                ext = '.bin'
+            path = os.path.join(directory, 'config' + ext)
+            
+            tgfile = await document.get_file(read_timeout=60, write_timeout=60)
+            await tgfile.download_to_drive(custom_path=path, read_timeout=120, write_timeout=120)
+            
+            # Analyse et décodage complet du fichier VPN
+            result = await asyncio.to_thread(analyze_file, path, filename)
+            report = format_report(result)
+            _record(update.effective_user.id, filename, result['type'], report)
+            
             try:
-                await context.bot.send_message(admin_id, f'🔔 Analyse VPN\n🆔 Utilisateur : {update.effective_user.id}\n📁 {name}\n📊 Historique disponible dans le panneau admin.')
-            except (BadRequest, TimedOut, NetworkError):
+                await status_msg.delete()
+            except Exception:
                 pass
-    except BadRequest as exc:
-        await update.message.reply_text('❌ Telegram refuse le fichier (taille ou téléchargement). ' + str(exc)[:100])
-    except (TimedOut, NetworkError):
-        await update.message.reply_text('❌ Téléchargement expiré après 3 essais. Réessaie dans quelques instants.')
-    except (ValueError, OSError) as exc:
-        await update.message.reply_text(f'❌ Analyse impossible : {str(exc)[:180]}')
+                
+            await update.message.reply_text(report)
+            
+            if update.effective_user.id != admin_id:
+                try:
+                    await context.bot.send_message(admin_id, f'🔔 Décodage VPN\n👤 ID : {update.effective_user.id}\n📁 {filename}')
+                except Exception:
+                    pass
+    except Exception as exc:
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await update.message.reply_text(f'❌ Erreur lors du décryptage : {type(exc).__name__}')
+        return True
+        
     return True
 
 
@@ -116,11 +151,11 @@ async def admin_history(update, context, admin_id):
     with sqlite3.connect(DB_FILE) as db:
         rows = db.execute('SELECT id,user_id,filename FROM decrypt_history ORDER BY id DESC LIMIT 15').fetchall()
     if not rows:
-        await update.effective_message.reply_text('📊 Aucun historique.')
+        await update.effective_message.reply_text('📊 Aucun rapport enregistré.')
         return
-    keys = [[InlineKeyboardButton(f'#{rid} | {uid} | {name[:25]}', callback_data=f'dec_history_{rid}')]
-            for rid,uid,name in rows]
-    await update.effective_message.reply_text('👑 HISTORIQUE DES ANALYSES', reply_markup=InlineKeyboardMarkup(keys))
+    keys = [[InlineKeyboardButton(f'#{rid} • {uid} • {name[:22]}', callback_data=f'dec_history_{rid}')]
+            for rid, uid, name in rows]
+    await update.effective_message.reply_text('👑 HISTORIQUE DES DÉCRYPTAGES', reply_markup=InlineKeyboardMarkup(keys))
 
 
 async def admin_report(update, context, admin_id):
@@ -129,10 +164,9 @@ async def admin_report(update, context, admin_id):
     if query.from_user.id != admin_id:
         return
     try:
-        rid = int(query.data.rsplit('_', 1)[1])
+        rid = int(query.data.removeprefix('dec_history_'))
     except ValueError:
         return
     with sqlite3.connect(DB_FILE) as db:
-        row = db.execute('SELECT user_id,filename,report FROM decrypt_history WHERE id=?', (rid,)).fetchone()
-    if row:
-        await query.message.reply_text(f'👑 Utilisateur : {row[0]}\n📁 {row[1]}\n\n{row[2]}'[:4000])
+        row = db.execute('SELECT user_id,report FROM decrypt_history WHERE id=?', (rid,)).fetchone()
+    await query.message.reply_text(f'👤 ID : {row[0]}\n\n{row[1][:3500]}' if row else 'Rapport introuvable.')
